@@ -1,1 +1,324 @@
 # model-selection
+rm=(list=ls(all=TRUE))
+library(data.table)
+library(sandwich)
+library(lmtest)
+library(tseries)
+library(plm)
+
+
+# Question 1
+# import data
+context1 <- fread('htv.csv')
+summary(context1)
+#                storage  display   value
+# variable       type     format     label      variable label
+# ---------------------------------------------------------------------------------------------------
+# wage            float   %9.0g                 hourly wage, 1991
+# abil            float   %9.0g                 abil. measure, not standardized
+# educ            byte    %9.0g                 highest grade completed by 1991
+# ne              byte    %9.0g                 =1 if in northeast, 1991
+# nc              byte    %9.0g                 =1 if in nrthcntrl, 1991
+# west            byte    %9.0g                 =1 if in west, 1991
+# south           byte    %9.0g                 =1 if in south, 1991
+# exper           byte    %9.0g                 potential experience
+# motheduc        byte    %9.0g                 highest grade, mother
+# fatheduc        byte    %9.0g                 highest grade, father
+# brkhme14        byte    %9.0g                 =1 if broken home, age 14
+# sibs            byte    %9.0g                 number of siblings
+# urban           byte    %9.0g                 =1 if in urban area, 1991
+# ne18            byte    %9.0g                 =1 if in NE, age 18
+# nc18            byte    %9.0g                 =1 if in NC, age 18
+# south18         byte    %9.0g                 =1 if in south, age 18
+# west18          byte    %9.0g                 =1 if in west, age 18
+# urban18         byte    %9.0g                 =1 if in urban area, age 18
+# tuit17          float   %9.0g                 college tuition, age 17
+# tuit18          float   %9.0g                 college tuition, age 18
+
+# run model1 and find AIC/BIC
+model1 <- lm(log(wage)~abil+educ+exper, data=context1)
+summary(model1)
+BIC(model1)
+AIC(model1)
+# > BIC(model1)
+# [1] 1961.569
+# > AIC(model1)
+# [1] 1935.995
+
+#run model2 and find AIC/BIC
+context1$abilsqu <- context1$abil^2
+context1$educsqu  <- context1$educ^2
+context1$expersqu<- context1$exper^2
+context1$x       <- context1$abil*context1$educ
+context1$y       <- context1$abil*context1$exper
+context1$z       <- context1$educ*context1$exper
+model2 <- lm(log(wage)~ abil+educ+exper+abilsqu+educsqu+expersqu+x+y+z, data=context1)
+
+
+summary(model2)
+BIC(model2)
+AIC(model2)
+# > BIC(model2)
+# [1] 1982.518
+# > AIC(model2)
+# [1] 1926.256
+
+#compare BIC of different model
+model3 <- lm(log(wage)~ abil+educ+exper+abilsqu+educsqu+expersqu+x+y, data=context1)
+model4 <- lm(log(wage)~ abil+educ+exper+abilsqu+educsqu+expersqu+x, data=context1)
+model5 <- lm(log(wage)~ abil+educ+exper+abilsqu+educsqu+expersqu, data=context1)
+model6 <- lm(log(wage)~ abil+educ+exper+abilsqu+educsqu, data=context1)
+model7 <- lm(log(wage)~ abil+educ+exper+abilsqu, data=context1)
+c(BIC(model3),BIC(model4),BIC(model5),BIC(model6),BIC(model7))
+# > c(BIC(model3),BIC(model4),BIC(model5),BIC(model6),BIC(model7))
+# [1] 1978.680 1972.140 1971.098 1966.224 1962.641
+
+
+### model2 <- lm(log(wage)~(abil+edu+exper)^2+I)
+model2 <- step(model2, direction = "backward", k=log(nrow(context1)))
+#final version model 2 is model7 
+model2 <- lm(log(wage)~ abil+educ+exper+abilsqu, data=context1)
+BIC(model2)
+# BIC(model2)
+# [1] 1962.641
+
+
+#Question 2
+#import data
+context2 <- fread('loanapp.csv')
+summary(context2)
+#                storage   display    value
+# variable name   type    format     label      variable label
+# ---------------------------------------------------------------------------------------------------
+# occ             byte    %9.0g                 occupancy
+# loanamt         int     %9.0g                 loan amt in thousands
+# action          byte    %9.0g                 type of action taken
+# msa             int     %9.0g                 msa number of property
+# suffolk         byte    %9.0g                 =1 if property in suffolk co.
+# appinc          int     %9.0g                 applicant income, $1000s
+# typur           byte    %9.0g                 type of purchaser of loan
+# unit            byte    %9.0g                 number of units in property
+# married         byte    %9.0g                 =1 if applicant married
+# dep             byte    %9.0g                 number of dependents
+# emp             byte    %9.0g                 years employed in line of work
+# yjob            byte    %9.0g                 years at this job
+# self            byte    %9.0g                 =1 if self employed
+# atotinc         float   %9.0g                 total monthly income
+# cototinc        float   %9.0g                 coapp total monthly income
+# hexp            float   %9.0g                 propose housing expense
+# price           float   %9.0g                 purchase price
+# other           float   %9.0g                 other financing, $1000s
+# liq             float   %9.0g                 liquid assets
+# rep             byte    %9.0g                 no. of credit reports
+# gdlin           int     %9.0g                 credit history meets guidelines
+# lines           float   %9.0g                 no. of credit lines on reports
+# mortg           byte    %9.0g                 credit history on mortgage paym
+# cons            byte    %9.0g                 credit history on consumer stuf
+# pubrec          byte    %9.0g                 =1 if filed bankruptcy
+# hrat            float   %9.0g                 housing exp, % total inc
+# obrat           float   %9.0g                 other oblgs, % total inc
+# fixadj          byte    %9.0g                 fixed or adjustable rate?
+# term            float   %9.0g                 term of loan in months
+# apr             float   %9.0g                 appraised value
+# prop            byte    %9.0g                 type of property
+# inss            byte    %9.0g                 PMI sought
+# inson           byte    %9.0g                 PMI approved
+# gift            byte    %9.0g                 gift as down payment
+# cosign          byte    %9.0g                 is there a cosigner
+# unver           byte    %9.0g                 unverifiable info
+# review          int     %9.0g                 number of times reviewed
+# netw            float   %9.0g                 net worth
+# unem            float   %9.0g                 unemployment rate by industry
+# min30           byte    %9.0g                 =1 if minority pop. > 30%
+# bd              byte    %9.0g                 =1 if boarded-up val > MSA med
+# mi              byte    %9.0g                 =1 if tract inc > MSA median
+# old             byte    %9.0g                 =1 if applic age > MSA median
+# vr              byte    %9.0g                 =1 if tract vac rte > MSA med
+# sch             byte    %9.0g                 =1 if > 12 years schooling
+# black           byte    %9.0g                 =1 if applicant black
+# hispan          byte    %9.0g                 =1 if applicant Hispanic
+# male            byte    %9.0g                 =1 if applicant male
+# reject          byte    %9.0g                 =1 if action == 3
+# approve         byte    %9.0g                 =1 if action == 1 or 2
+# mortno          byte    %9.0g                 no mortgage history
+# mortperf        byte    %9.0g                 no late mort. payments
+# mortlat1        byte    %9.0g                 one or two late payments
+# mortlat2        byte    %9.0g                 > 2 late payments
+# chist           byte    %9.0g                 =0 if accnts deliq. >= 60 days
+# multi           byte    %9.0g                 =1 if two or more units
+# loanprc         float   %9.0g                 amt/price
+# thick           byte    %9.0g                 =1 if rep > 2
+# white           byte    %9.0g                 =1 if applicant white
+
+#generate model3
+model3 <- glm(approve~white, family = binomial(link = 'logit'),data = context2)
+coeftest(model3, vcov. = vcov)
+# z test of coefficients:
+# Estimate     Std. Error z value  Pr(>|z|)    
+# (Intercept)  0.88469    0.12529  7.0609 1.654e-12 ***
+# white        1.40942    0.15115  9.3246 < 2.2e-16 ***
+coeftest(model3, vcov. = vcovHC)
+# z test of coefficients:
+# Estimate     Std. Error z value  Pr(>|z|)    
+# (Intercept)  0.88469    0.12570   7.038  1.95e-12 ***
+# white        1.40942    0.15152   9.302 < 2.2e-16 ***
+
+#generate model4
+model4 <- glm(approve~white+hrat+obrat+loanprc+unem+male+married+dep+sch+cosign+chist+pubrec+mortlat1+mortlat2+vr, family = binomial(link = 'logit'), data = context2)
+coeftest(model4, vcov. = vcov)
+# z test of coefficients:
+#              Estimate  Std. Error z value  Pr(>|z|)    
+# (Intercept)  3.801710   0.594675  6.3929 1.627e-10 ***
+# white        0.937764   0.172901  5.4237 5.838e-08 ***
+# hrat         0.013263   0.012880  1.0298  0.303125    
+# obrat       -0.053034   0.011280 -4.7016 2.581e-06 ***
+# loanprc     -1.904951   0.460407 -4.1375 3.511e-05 ***
+# unem        -0.066579   0.032808 -2.0294  0.042421 *  
+# male        -0.066385   0.206423 -0.3216  0.747758    
+# married      0.503282   0.177993  2.8275  0.004691 ** 
+# dep         -0.090734   0.073332 -1.2373  0.215977    
+# sch          0.041229   0.178399  0.2311  0.817234    
+# cosign       0.132059   0.446080  0.2960  0.767197    
+# chist        1.066577   0.171208  6.2297 4.673e-10 ***
+# pubrec      -1.340665   0.217362 -6.1679 6.921e-10 ***
+# mortlat1    -0.309882   0.463510 -0.6686  0.503780    
+# mortlat2    -0.894675   0.568570 -1.5736  0.115591    
+# vr          -0.349828   0.153721 -2.2757  0.022862 * 
+coeftest(model4, vcov. = vcovHC)
+# z test of coefficients:
+#              Estimate   Std. Error z value  Pr(>|z|)    
+# (Intercept)  3.801710   0.653953  5.8134 6.120e-09 ***
+# white        0.937764   0.177764  5.2753 1.325e-07 ***
+# hrat         0.013263   0.013924  0.9525 0.3408381    
+# obrat       -0.053034   0.012809 -4.1403 3.469e-05 ***
+# loanprc     -1.904951   0.535160 -3.5596 0.0003714 ***
+# unem        -0.066579   0.036124 -1.8430 0.0653225 .  
+# male        -0.066385   0.210174 -0.3159 0.7521100    
+# married      0.503282   0.186857  2.6934 0.0070728 ** 
+# dep         -0.090734   0.075412 -1.2032 0.2289086    
+# sch          0.041229   0.179024  0.2303 0.8178605    
+# cosign       0.132059   0.406794  0.3246 0.7454585    
+# chist        1.066577   0.173265  6.1558 7.472e-10 ***
+# pubrec      -1.340665   0.233076 -5.7520 8.817e-09 ***
+# mortlat1    -0.309882   0.545600 -0.5680 0.5700580    
+# mortlat2    -0.894675   0.608995 -1.4691 0.1418053    
+# vr          -0.349828   0.156653 -2.2331 0.0255398 *  
+
+#generate model5
+wo <- context2$white*context2$obrat
+model5 <- glm(approve~white+hrat+obrat+loanprc+unem+male+married+dep+sch+cosign+chist+pubrec+mortlat1+mortlat2+vr+wo, family = binomial(link = 'logit'), data= context2)
+coeftest(model5, vcov. = vcov)
+# z test of coefficients:
+#              Estimate Std. Error z value  Pr(>|z|)    
+# (Intercept)  4.306527   0.834935  5.1579 2.497e-07 ***
+# white        0.296882   0.755651  0.3929  0.694407    
+# hrat         0.013405   0.012951  1.0351  0.300625    
+# obrat       -0.066604   0.019352 -3.4417  0.000578 ***
+# loanprc     -1.909701   0.459165 -4.1591 3.195e-05 ***
+# unem        -0.067549   0.032777 -2.0609  0.039315 *  
+# male        -0.071904   0.207041 -0.3473  0.728372    
+# married      0.503536   0.178085  2.8275  0.004691 ** 
+# dep         -0.095772   0.073547 -1.3022  0.192849    
+# sch          0.034893   0.178936  0.1950  0.845390    
+# cosign       0.152567   0.450044  0.3390  0.734606    
+# chist        1.061385   0.171596  6.1854 6.196e-10 ***
+# pubrec      -1.344267   0.217932 -6.1683 6.904e-10 ***
+# mortlat1    -0.333314   0.462820 -0.7202  0.471415    
+# mortlat2    -0.920857   0.569419 -1.6172  0.105838    
+# vr          -0.350862   0.153913 -2.2796  0.022631 *  
+# wo           0.018149   0.020786  0.8731  0.382587    
+coeftest(model5, vcov. = vcovHC)
+# z test of coefficients:
+#              Estimate Std. Error z value  Pr(>|z|)    
+# (Intercept)  4.306527   0.901355  4.7778 1.772e-06 ***
+# white        0.296882   0.858772  0.3457 0.7295644    
+# hrat         0.013405   0.014158  0.9468 0.3437269    
+# obrat       -0.066604   0.020728 -3.2133 0.0013121 ** 
+# loanprc     -1.909701   0.533546 -3.5793 0.0003446 ***
+# unem        -0.067549   0.035988 -1.8770 0.0605206 .  
+# male        -0.071904   0.210842 -0.3410 0.7330802    
+# married      0.503536   0.187212  2.6897 0.0071526 ** 
+# dep         -0.095772   0.076030 -1.2597 0.2077873    
+# sch          0.034893   0.180807  0.1930 0.8469704    
+# cosign       0.152567   0.413003  0.3694 0.7118226    
+# chist        1.061385   0.174154  6.0945 1.098e-09 ***
+# pubrec      -1.344267   0.235075 -5.7185 1.075e-08 ***
+# mortlat1    -0.333314   0.540401 -0.6168 0.5373739    
+# mortlat2    -0.920857   0.610013 -1.5096 0.1311534    
+# vr          -0.350862   0.157302 -2.2305 0.0257141 *  
+# wo           0.018149   0.023603  0.7689 0.4419416 
+
+#Question3
+#import data
+context3 <- fread('smoke.csv')
+summary(context3)
+#                 storage   display    value
+# variable name   type    format     label      variable label
+# educ            float   %9.0g                 years of schooling
+# cigpric         float   %9.0g                 state cig. price, cents/pack
+# white           byte    %8.0g                 =1 if white
+# age             byte    %8.0g                 in years
+# income          int     %8.0g                 annual income, $
+# cigs            byte    %8.0g                 cigs. smoked per day
+# restaurn        byte    %8.0g                 =1 if rest. smk. restrictions
+
+#generate model6
+agesqu <- context3$age^2
+model6 <- glm(cigs~educ+age+agesqu+log(income)+restaurn, family = poisson(link = 'log'), data = context3)
+
+coeftest(model6, vcov. = vcov)
+# z test of coefficients:
+#              Estimate  Std. Error  z value  Pr(>|z|)    
+# (Intercept) -8.9532e-02  1.8815e-01  -0.4759    0.6342    
+# educ        -5.9521e-02  4.2573e-03 -13.9811 < 2.2e-16 ***
+# age          1.1399e-01  4.9683e-03  22.9426 < 2.2e-16 ***
+# agesqu      -1.3679e-03  5.6958e-05 -24.0161 < 2.2e-16 ***
+# log(income)  1.0472e-01  2.0262e-02   5.1682 2.363e-07 ***
+# restaurn    -3.6131e-01  3.0739e-02 -11.7543 < 2.2e-16 ***
+coeftest(model6, vcov. = vcovHC)
+# z test of coefficients:
+#               Estimate Std. Error z value  Pr(>|z|)    
+# (Intercept) -0.0895322  0.7819305 -0.1145  0.908840    
+# educ        -0.0595212  0.0194111 -3.0663  0.002167 ** 
+# age          0.1139858  0.0215662  5.2854 1.254e-07 ***
+# agesqu      -0.0013679  0.0002485 -5.5045 3.701e-08 ***
+# log(income)  0.1047168  0.0840807  1.2454  0.212973    
+# restaurn    -0.3613089  0.1386491 -2.6059  0.009163 ** 
+
+#Question4
+library(evtree)
+library(party)
+#import data
+context4 <- fread('hdisease.csv')
+summary(context4)
+# Variable name		Description
+# dset						Data set
+# age							Age (years)
+# sex							Sex
+# cp							Chest pain scale (1-4)
+# trestbps				Resting blood pressure (mm Hg on admission to hospital)
+# chol						Cholesterol (mg/dl)
+# restecg					Resting ECG results
+# thalach					Maximum heart rate (beats per min)
+# exang						Exercise-induced angina
+# hdisease				Heart Disease (stage 0-4)
+context5 <- fread('hdisease-new.csv')
+summary(context5)
+# Variable name		Description
+# dset						Data set
+# age							Age (years)
+# cp							Chest pain scale (1-4)
+# trestbps				Resting blood pressure (mm Hg on admission to hospital)
+# thalach					Maximum heart rate (beats per min)
+# exang						Exercise-induced angina
+
+#generate model
+context4$exa <- as.numeric(context4$exang=='yes',1,0)
+model7 <- evtree(hdisease~age+cp+trestbps+thalach+exa, data = context4)
+model8 <- ctree(hdisease~age+cp+trestbps+thalach+exa, data = context4)
+plot(model7)
+plot(model8)
+context5$exa <- as.numeric(context5$exang=='yes',1,0)
+context5$hdisease_pred <- predict(model8,context5)
+context5$hdisease_pred
+round(context5$hdisease_pred)
